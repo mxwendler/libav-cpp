@@ -64,7 +64,9 @@ public:
 		/* Convert the samples using the resampler. */
 		auto err = swr_convert_frame(swr_, *output, *input);
 		if (err < 0)
+		{
 			RETURN_AV_ERROR("Could not convert input samples: {}", avErrorStr(err));
+		}
 
 		return {};
 	}

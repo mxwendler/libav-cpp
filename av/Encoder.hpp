@@ -13,6 +13,8 @@ class Encoder : NoCopyable
 	    : codecContext_(codecContext)
 	{}
 
+
+
 public:
 	static Expected<Ptr<Encoder>> create(AVCodecID codecId, bool allowHWAccel = true) noexcept
 	{
@@ -265,6 +267,7 @@ private:
 				}
 				codecContext_->channels       = av_get_channel_layout_nb_channels(codecContext_->channel_layout);
 				codecContext_->channel_layout = AV_CH_LAYOUT_STEREO;
+
 				if (codecContext_->codec->channel_layouts)
 				{
 					codecContext_->channel_layout = codecContext_->codec->channel_layouts[0];

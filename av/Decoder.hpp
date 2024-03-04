@@ -1,6 +1,7 @@
 #pragma once
 
 #include <av/Frame.hpp>
+#include <av/Packet.hpp>
 #include <av/common.hpp>
 
 namespace av

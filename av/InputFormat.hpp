@@ -17,7 +17,8 @@ public:
 	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio = false) noexcept
 	{
 		AVFormatContext* ic = nullptr;
-		auto err            = avformat_open_input(&ic, url.data(), nullptr, nullptr);
+		const AVInputFormat *iformat = av_find_input_format("dshow");
+		auto err            = avformat_open_input(&ic, url.data(), iformat, nullptr);
 		if (err < 0)
 			RETURN_AV_ERROR("Cannot open input '{}': {}", url, avErrorStr(err));
 
@@ -93,7 +94,7 @@ private:
 	Expected<void> findBestStream(AVMediaType type) noexcept
 	{
 		AVCodec* dec = nullptr;
-		int stream_i = av_find_best_stream(ic_, type, -1, -1, &dec, 0);
+		int stream_i = av_find_best_stream(ic_, type, -1, -1, (const AVCodec **) &dec, 0);
 		if (stream_i == AVERROR_STREAM_NOT_FOUND)
 			RETURN_AV_ERROR("Failed to find {} stream in '{}'", av_get_media_type_string(type), url_);
 		if (stream_i == AVERROR_DECODER_NOT_FOUND)

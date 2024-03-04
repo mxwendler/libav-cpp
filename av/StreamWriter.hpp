@@ -69,9 +69,7 @@ public:
 
 		stream->sws = swsExp.value();
 
-		auto sIndExp = formatContext_->addStream(c);
-		if (!sIndExp)
-			FORWARD_AV_ERROR(sIndExp);
+
 
 		stream->index = sIndExp.value();
 		int index     = stream->index;
