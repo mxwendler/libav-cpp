@@ -6,11 +6,12 @@ namespace av
 {
 class Frame
 {
+public:
 	explicit Frame(AVFrame* frame) noexcept
 	    : frame_(frame)
 	{}
 
-public:
+
 	Frame() noexcept
 	    : frame_(av_frame_alloc())
 	{

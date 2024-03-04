@@ -8,11 +8,79 @@
 #include <av/Scale.hpp>
 #include <av/common.hpp>
 
+extern "C"
+{
+#include "libavutil/audio_fifo.h"
+}
+
+static int init_fifo(AVAudioFifo **fifo, AVCodecContext *output_codec_context)
+{
+	if (!(*fifo = av_audio_fifo_alloc(output_codec_context->sample_fmt,
+		output_codec_context->channels, 1))) {
+		fprintf(stderr, "Could not allocate FIFO\n");
+		return AVERROR(ENOMEM);
+	}
+	return 0;
+}
+
+static int add_samples_to_fifo(AVAudioFifo *fifo,
+	uint8_t **converted_input_samples,
+	const int frame_size)
+{
+	int error;
+
+	if ((error = av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + frame_size)) < 0) {
+		fprintf(stderr, "Could not reallocate FIFO\n");
+		return error;
+	}
+
+	if (av_audio_fifo_write(fifo, (void **)converted_input_samples,
+		frame_size) < frame_size) {
+		fprintf(stderr, "Could not write data to FIFO\n");
+		return AVERROR_EXIT;
+	}
+	return 0;
+}
+
+static int init_output_frame(AVFrame **frame,
+	AVCodecContext *output_codec_context,
+	int frame_size)
+{
+	int error;
+
+	if (!(*frame = av_frame_alloc())) {
+		fprintf(stderr, "Could not allocate output frame\n");
+		return AVERROR_EXIT;
+	}
+
+	/* Set the frame's parameters, especially its size and format.
+	 * av_frame_get_buffer needs this to allocate memory for the
+	 * audio samples of the frame.
+	 * Default channel layouts based on the number of channels
+	 * are assumed for simplicity. */
+	(*frame)->nb_samples = frame_size;
+	(*frame)->channel_layout = output_codec_context->channel_layout;
+	(*frame)->format = output_codec_context->sample_fmt;
+	(*frame)->sample_rate = output_codec_context->sample_rate;
+
+	/* Allocate the samples of the created frame. This call will make
+	 * sure that the audio frame can hold as many samples as specified. */
+	if ((error = av_frame_get_buffer(*frame, 0)) < 0) {
+		//fprintf(stderr, "Could not allocate output frame samples (error '%s')\n", av_err2str(error));
+		av_frame_free(frame);
+		return error;
+	}
+
+	return 0;
+}
+
 namespace av
 {
 class StreamWriter : NoCopyable
 {
 	StreamWriter() = default;
+
+	AVAudioFifo *fifo = nullptr;
 
 public:
 	[[nodiscard]] static Expected<Ptr<StreamWriter>> create(std::string_view filename) noexcept
@@ -51,10 +119,21 @@ public:
 
 		Ptr<Encoder> c = expc.value();
 
+
+
 		c->setVideoParams(outWidth, outHeight, frameRate, std::move(codecParams));
+
+
+		auto sIndExp = formatContext_->addStream(c);
+		if (!sIndExp)
+			FORWARD_AV_ERROR(sIndExp);
+
+
 		auto cOpenEXp = c->open();
 		if (!cOpenEXp)
 			FORWARD_AV_ERROR(cOpenEXp);
+
+		auto ret = avcodec_parameters_from_context(std::get<0>(formatContext_->streams_.at(0))->codecpar, c->native());
 
 		auto frameExp = c->newWriteableVideoFrame();
 		if (!frameExp)
@@ -157,24 +236,81 @@ public:
 		}
 		else if (stream->type == AVMEDIA_TYPE_AUDIO)
 		{
+			frame.native()->ch_layout = stream->frame->native()->ch_layout;
+			frame.native()->channel_layout = stream->frame->native()->channel_layout;
 			stream->swr->convert(frame, *stream->frame);
-			stream->frame->native()->pts = stream->nextPts;
-			stream->nextPts += stream->frame->native()->nb_samples;
+
+			// send the frame to the encoder
+			if (!fifo)
+			{
+				init_fifo(&fifo, stream->encoder->native());
+			}
+
+			// send all samples to fifo
+			add_samples_to_fifo(fifo, &stream->frame->native()->extended_data[0], stream->frame->native()->nb_samples);
 		}
 		else
 			RETURN_AV_ERROR("Unsupported/unknown stream type: {}", av_get_media_type_string(stream->type));
 
-		auto [res, sz] = stream->encoder->encodeFrame(*stream->frame, stream->packets);
-
-		if (res == Result::kFail)
-			RETURN_AV_ERROR("Encoder returned failure");
-
-		for (int i = 0; i < sz; ++i)
+		if (stream->type == AVMEDIA_TYPE_VIDEO)
 		{
-			auto expected = formatContext_->writePacket(stream->packets[i], stream->index);
-			if (!expected)
-				LOG_AV_ERROR(expected.errorString());
+			auto[res, sz] = stream->encoder->encodeFrame(*stream->frame, stream->packets);
+
+			if (res == Result::kFail)
+				RETURN_AV_ERROR("Encoder returned failure");
+
+			for (int i = 0; i < sz; ++i)
+			{
+				auto expected = formatContext_->writePacket(stream->packets[i], stream->index);
+				if (!expected)
+					LOG_AV_ERROR(expected.errorString());
+			}
 		}
+		else if (stream->type == AVMEDIA_TYPE_AUDIO)
+		{
+			/* Use the maximum number of possible samples per frame.
+			 * If there is less than the maximum possible frame size in the FIFO
+			 * buffer use this number. Otherwise, use the maximum possible frame size. */
+			auto c = stream->encoder->native();
+			const int frame_size = FFMIN(av_audio_fifo_size(fifo), c->frame_size);
+
+			/* Read as many samples from the FIFO buffer as required to fill the frame.
+			 * The samples are stored in the frame temporarily. */
+			while(av_audio_fifo_size(fifo) > frame_size)
+			{
+				AVFrame *output_frame;
+				if (init_output_frame(&output_frame, c, frame_size))
+				{
+					// return AVERROR_EXIT;
+					RETURN_AV_ERROR("Encoder returned failure");
+				}
+
+				if (av_audio_fifo_read(fifo, (void **)output_frame->data, frame_size) < frame_size) {
+					fprintf(stderr, "Could not read data from FIFO\n");
+					av_frame_free(&output_frame);
+					// return AVERROR_EXIT;
+					RETURN_AV_ERROR("Encoder returned failure");
+				}
+
+				av::Frame __frame(output_frame);
+
+				output_frame->pts = stream->nextPts;
+				stream->nextPts += output_frame->nb_samples;
+
+				auto[res, sz] = stream->encoder->encodeFrame(__frame, stream->packets);
+
+				if (res == Result::kFail)
+					RETURN_AV_ERROR("Encoder returned failure");
+
+				for (int i = 0; i < sz; ++i)
+				{
+					auto expected = formatContext_->writePacket(stream->packets[i], stream->index);
+					if (!expected)
+						LOG_AV_ERROR(expected.errorString());
+				}
+			}
+		}
+
 
 		return {};
 	}

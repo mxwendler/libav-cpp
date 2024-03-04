@@ -132,9 +132,10 @@ private:
 		return streams_[index];
 	}
 
-private:
+public:
 	AVFormatContext* oc_{nullptr};
 	std::vector<std::tuple<AVStream*, Ptr<Encoder>>> streams_;
+
 };
 
 }// namespace av

@@ -24,21 +24,40 @@ public:
           * properly by the demuxer and/or decoder).
           */
 
+		auto i = av_get_default_channel_layout(inChannels);
+		auto o = av_get_default_channel_layout(outChannels);
 		LOG_AV_DEBUG("Creating swr context: input - channel_layout: {} sample_rate: {} format: {} output - channel_layout: {} sample_rate: {} format: {}",
 		             av_get_default_channel_layout(inChannels), inSampleRate, av_get_sample_fmt_name(inSampleFmt),
 		             av_get_default_channel_layout(outChannels), outSampleRate, av_get_sample_fmt_name(outSampleFmt));
 
-		auto swr = swr_alloc_set_opts(nullptr,
-		                              av_get_default_channel_layout(outChannels),
-		                              outSampleFmt,
-		                              outSampleRate,
-		                              av_get_default_channel_layout(inChannels),
-		                              inSampleFmt,
-		                              inSampleRate,
-		                              0, nullptr);
+		//auto swr = swr_alloc_set_opts(nullptr,
+		//                              o,
+		//                              outSampleFmt,
+		//                              outSampleRate,
+		//                              i,
+		//                              inSampleFmt,
+		//                              inSampleRate,
+		//                              0, nullptr);
+		//if (!swr)
+		//	RETURN_AV_ERROR("Failed to create swr context");
 
-		if (!swr)
-			RETURN_AV_ERROR("Failed to create swr context");
+		SwrContext* swr = nullptr;
+		AVChannelLayout avch_in;
+		av_channel_layout_default(&avch_in, inChannels);
+		AVChannelLayout avch_out;
+		av_channel_layout_default(&avch_out, outChannels);
+		int ret = swr_alloc_set_opts2(
+			&swr,					// we're allocating a new context
+			&avch_out,				// out_ch_layout
+			outSampleFmt,			// out_sample_fmt
+			outSampleRate,			// out_sample_rate
+			&avch_in,				// in_ch_layout
+			inSampleFmt,			// in_sample_fmt
+			inSampleRate,			// in_sample_rate
+			0,						// log_offset
+			nullptr);				// log_ctx
+
+
 
 		/* Open the resampler with the specified parameters. */
 		int err = 0;

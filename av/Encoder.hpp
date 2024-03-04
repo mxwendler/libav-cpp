@@ -138,6 +138,11 @@ public:
 		/* Resolution must be a multiple of two. */
 		codecContext_->channels       = channels;
 		codecContext_->channel_layout = av_get_default_channel_layout(channels);
+
+		AVChannelLayout avch_in;
+		av_channel_layout_default(&avch_in, channels);
+		codecContext_->ch_layout = avch_in;
+
 		codecContext_->sample_rate    = sampleRate;
 		codecContext_->bit_rate       = bitRate;
 
@@ -182,6 +187,8 @@ public:
 		auto frame = f->native();
 
 		frame->channel_layout = codecContext_->channel_layout;
+		frame->ch_layout = codecContext_->ch_layout;
+
 		//frame->nb_samples = 1024;
 		frame->sample_rate = codecContext_->sample_rate;
 		frame->format      = codecContext_->sample_fmt;
@@ -210,7 +217,11 @@ public:
 private:
 	bool sendFrame(AVFrame* frame) noexcept
 	{
-		// send the frame to the encoder
+		if (!avcodec_is_open(codecContext_) || !av_codec_is_encoder(codecContext_->codec))
+		{
+			return AVERROR(EINVAL);
+		}
+
 		auto err = avcodec_send_frame(codecContext_, frame);
 		if (err < 0)
 		{

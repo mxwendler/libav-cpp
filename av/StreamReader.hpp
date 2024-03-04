@@ -80,6 +80,7 @@ public:
 					continue;
 
 				frame.type(AVMEDIA_TYPE_AUDIO);
+				frame.native()->ch_layout = dec->native()->ch_layout;
 
 				return true;
 			}
