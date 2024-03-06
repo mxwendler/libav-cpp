@@ -359,7 +359,7 @@ private:
 		bool flushed{false};
 	};
 
-private:
+public:
 	std::string filename_;
 	std::vector<Ptr<Stream>> streams_;
 	Ptr<OutputFormat> formatContext_;
