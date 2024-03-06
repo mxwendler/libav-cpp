@@ -92,8 +92,19 @@ public:
 		if (err < 0)
 			RETURN_AV_ERROR("Failed to open io context for '{}': {}", filename, err);
 
-		AVDictionary* opts = nullptr;
-		err                = avformat_write_header(oc_, &opts);
+		// AVDictionary* opts = nullptr;
+		// err                = avformat_write_header(oc_, &opts);
+		// if (err < 0)
+		// 	RETURN_AV_ERROR("Failed to write header: {}", avErrorStr(err));
+
+		//AVDictionary* opts = nullptr;
+		av_dict_set(&oc_->metadata, "movflags", "use_metadata_tags", 0);
+		av_dict_set(&oc_->metadata, "title", "testtest1", 0);
+		av_dict_set(&oc_->metadata, "titles", "testtest2", 0);
+		std::string placeholder(1000000, 'X');
+		av_dict_set(&oc_->metadata, "MXRECORDERMETADATAMARKERV1000", placeholder.c_str(), 0);
+
+		err = avformat_write_header(oc_, &oc_->metadata);
 		if (err < 0)
 			RETURN_AV_ERROR("Failed to write header: {}", avErrorStr(err));
 
