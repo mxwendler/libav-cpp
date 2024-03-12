@@ -148,7 +148,8 @@ public:
 
 		stream->sws = swsExp.value();
 
-
+		// set start time as real time wall clock.
+		stream->recording_start = chrono::system_clock::now();
 
 		stream->index = sIndExp.value();
 		int index     = stream->index;
@@ -160,6 +161,8 @@ public:
 
 		const AVCodec* codec = c->native()->codec;
 		LOG_AV_INFO("Added video stream #{} codec: {} {}x{} {} fps", index, codec->long_name, c->native()->width, c->native()->height, av_q2d(av_inv_q(c->native()->time_base)));
+
+
 
 		return index;
 	}
@@ -232,7 +235,20 @@ public:
 		if (stream->type == AVMEDIA_TYPE_VIDEO)
 		{
 			stream->sws->scale(frame, *stream->frame);
-			stream->frame->native()->pts = stream->nextPts++;
+
+			// set video frame pts. cannot simply increment, since live recordings
+			// may have skipped frames. so use real time wall clock diff, calc
+			// frame and store as pts.
+			// some info here:
+			// https://blog.mi.hdm-stuttgart.de/index.php/2018/03/21/livestreaming-with-libav-tutorial-part-2/
+			#if 0
+				stream->frame->native()->pts = stream->nextPts++;
+			#else
+				auto ms = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now()-stream->recording_start);
+				auto frames_happen_until_now = (ms.count() / 1000.0) / av_q2d(stream->encoder->native()->time_base);
+				stream->nextPts = frames_happen_until_now;
+				stream->frame->native()->pts = stream->nextPts;
+			#endif
 		}
 		else if (stream->type == AVMEDIA_TYPE_AUDIO)
 		{
@@ -357,6 +373,9 @@ private:
 		int nextPts{0};
 		int sampleCount{0};
 		bool flushed{false};
+
+		chrono::time_point<std::chrono::system_clock> recording_start;
+
 	};
 
 public:
