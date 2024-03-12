@@ -237,7 +237,7 @@ public:
 			stream->sws->scale(frame, *stream->frame);
 
 			// set video frame pts. cannot simply increment, since live recordings
-			// may have skipped frames. so use real time wall clock diff, calc
+			// may have skipped frames. so use real time wall clock difference, calculate
 			// frame and store as pts.
 			// some info here:
 			// https://blog.mi.hdm-stuttgart.de/index.php/2018/03/21/livestreaming-with-libav-tutorial-part-2/
@@ -246,8 +246,13 @@ public:
 			#else
 				auto ms = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now()-stream->recording_start);
 				auto frames_happen_until_now = (ms.count() / 1000.0) / av_q2d(stream->encoder->native()->time_base);
-				stream->nextPts = frames_happen_until_now;
+
+				// increment up to calculated 'frames_happen_until_now' but at least 1
+				auto incremented = std::max(stream->nextPts + 1.0, frames_happen_until_now);
+
+				stream->nextPts = incremented;
 				stream->frame->native()->pts = stream->nextPts;
+				printf("%i\n", stream->nextPts);
 			#endif
 		}
 		else if (stream->type == AVMEDIA_TYPE_AUDIO)
