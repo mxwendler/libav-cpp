@@ -248,7 +248,7 @@ public:
 				auto frames_happen_until_now = (ms.count() / 1000.0) / av_q2d(stream->encoder->native()->time_base);
 
 				// increment up to calculated 'frames_happen_until_now' but at least 1
-				auto incremented = std::max(stream->nextPts + 1.0, frames_happen_until_now);
+				auto incremented = max(stream->nextPts + 1.0, frames_happen_until_now);
 
 				stream->nextPts = incremented;
 				stream->frame->native()->pts = stream->nextPts;

@@ -125,6 +125,7 @@ public:
                      * timebase should be 1/framerate and timestamp increments should be
                      * identical to 1. */
 		codecContext_->time_base = framerate;
+		codecContext_->gop_size = 10;
 
 		codecContext_->bit_rate = 0;
 		if (codecContext_->priv_data)
