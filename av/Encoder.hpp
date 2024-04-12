@@ -125,7 +125,7 @@ public:
                      * timebase should be 1/framerate and timestamp increments should be
                      * identical to 1. */
 		codecContext_->time_base = framerate;
-		codecContext_->gop_size = 10;
+		codecContext_->gop_size = 10; //set gop_size
 
 		codecContext_->bit_rate = 0;
 		if (codecContext_->priv_data)
@@ -293,7 +293,6 @@ private:
 				break;
 
 			case AVMEDIA_TYPE_VIDEO:
-				codecContext_->gop_size = 12; /* emit one intra frame every twelve frames at most */
 				codecContext_->pix_fmt  = codecContext_->codec->pix_fmts ? codecContext_->codec->pix_fmts[0] : AV_PIX_FMT_YUV420P;
 				if (codecContext_->codec_id == AV_CODEC_ID_MPEG2VIDEO)
 				{
@@ -313,10 +312,7 @@ private:
                    this seems easier than finding an appropriate default bitrate. */
 				if (codecContext_->codec_id == AV_CODEC_ID_H264 || codecContext_->codec_id == AV_CODEC_ID_HEVC)
 				{
-					codecContext_->gop_size = -1;
-
 					codecContext_->qmin = -1;
-
 					codecContext_->bit_rate = 0;
 					if (codecContext_->priv_data) {
 						//av_opt_set(codecContext_->priv_data, "crf", "23", 0);
