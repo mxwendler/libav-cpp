@@ -252,7 +252,6 @@ public:
 
 				stream->nextPts = incremented;
 				stream->frame->native()->pts = stream->nextPts;
-				printf("%i\n", stream->nextPts);
 			#endif
 		}
 		else if (stream->type == AVMEDIA_TYPE_AUDIO)
