@@ -203,6 +203,7 @@ public:
 
 		stream->frame   = frameExp.value();
 		stream->encoder = c;
+		stream->audio_preroll_frames = outSampleRate;
 
 		auto swrExp = Resample::create(inChannels, inSampleFmt, inSampleRate, outChannels, c->native()->sample_fmt, outSampleRate);
 		if (!swrExp)
@@ -266,8 +267,18 @@ public:
 				init_fifo(&fifo, stream->encoder->native());
 			}
 
-			// send all samples to fifo
-			add_samples_to_fifo(fifo, &stream->frame->native()->extended_data[0], stream->frame->native()->nb_samples);
+			// skip preroll samples
+			auto num_samples = stream->frame->native()->nb_samples;
+
+			if (stream->audio_preroll_frames > 0)
+			{
+				stream->audio_preroll_frames -= num_samples;
+			}
+			else
+			{
+				// send all samples to fifo
+				add_samples_to_fifo(fifo, &stream->frame->native()->extended_data[0], num_samples);
+			}
 		}
 		else
 			RETURN_AV_ERROR("Unsupported/unknown stream type: {}", av_get_media_type_string(stream->type));
@@ -375,7 +386,7 @@ private:
 		Ptr<Frame> frame;
 		std::vector<Packet> packets;
 		int nextPts{0};
-		int sampleCount{0};
+		int audio_preroll_frames{ 0 };
 		bool flushed{false};
 
 		chrono::time_point<std::chrono::system_clock> recording_start;
