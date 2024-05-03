@@ -14,11 +14,11 @@ class StreamReader : NoCopyable
 	StreamReader() = default;
 
 public:
-	static Expected<Ptr<StreamReader>> create(std::string_view url, bool enableAudio = false) noexcept
+	static Expected<Ptr<StreamReader>> create(std::string_view url, bool enableAudio = false, bool enableVideo = true) noexcept
 	{
 		Ptr<StreamReader> sr{new StreamReader};
 
-		auto iformExp = SimpleInputFormat::create(url, enableAudio);
+		auto iformExp = SimpleInputFormat::create(url, enableAudio, enableVideo);
 		if (!iformExp)
 			FORWARD_AV_ERROR(iformExp);
 
@@ -51,7 +51,7 @@ public:
 				return false;
 
 			Ptr<Decoder> dec;
-			if (packet.native()->stream_index == std::get<0>(vStream_)->index)
+			if (std::get<0>(vStream_) && packet.native()->stream_index == std::get<0>(vStream_)->index)
 			{
 				dec = std::get<1>(vStream_);
 

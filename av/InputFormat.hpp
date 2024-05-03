@@ -14,7 +14,7 @@ class SimpleInputFormat : NoCopyable
 	{}
 
 public:
-	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio = false) noexcept
+	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio = false, bool enableVideo = true) noexcept
 	{
 		AVFormatContext* ic = nullptr;
 		const AVInputFormat *iformat = av_find_input_format("dshow");
@@ -32,6 +32,7 @@ public:
 		Ptr<SimpleInputFormat> res{new SimpleInputFormat{ic}};
 		res->url_ = url;
 
+		if (enableVideo)
 		{
 			auto ret = res->findBestStream(AVMEDIA_TYPE_VIDEO);
 			if (!ret)
