@@ -203,7 +203,16 @@ public:
 
 		stream->frame   = frameExp.value();
 		stream->encoder = c;
-		stream->audio_preroll_frames = outSampleRate;
+
+		// audio_preroll_frames enable audio vs. video time skewing.
+		// it was useful when we started a stream for each recording
+		// because windows (libav) prepended a silence buffer and
+		// there was no way to set / uset the size of the buffer.
+		// more info here
+		// https://stackoverflow.com/questions/78243455/libav-audio-latency-cannot-set-audio-buffer-size
+		// now this is not used any more, all audio and video devices
+		// are opened at program start and stay in sync.
+		stream->audio_preroll_frames = 0;
 
 		auto swrExp = Resample::create(inChannels, inSampleFmt, inSampleRate, outChannels, c->native()->sample_fmt, outSampleRate);
 		if (!swrExp)
