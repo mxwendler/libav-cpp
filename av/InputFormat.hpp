@@ -3,6 +3,9 @@
 #include <av/Decoder.hpp>
 #include <av/Packet.hpp>
 #include <av/common.hpp>
+#include <chrono>
+#include <future>
+#include <thread>
 
 namespace av
 {
@@ -14,15 +17,53 @@ class SimpleInputFormat : NoCopyable
 	{}
 
 public:
-	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio = false, bool enableVideo = true) noexcept
+	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio = false, bool enableVideo = true, std::string_view format_name = "") noexcept
 	{
 		AVFormatContext* ic = nullptr;
-		const AVInputFormat *iformat = av_find_input_format("dshow");
-		auto err            = avformat_open_input(&ic, url.data(), iformat, nullptr);
-		if (err < 0)
-			RETURN_AV_ERROR("Cannot open input '{}': {}", url, avErrorStr(err));
+		const AVInputFormat *iformat = av_find_input_format(format_name.empty() ? "dshow" : format_name.data());
 
-		err = avformat_find_stream_info(ic, nullptr);
+		//
+		// avformat_open_input and avformat_find_stream_info can block indefinitely on
+		// network sources (e.g. NDI) that bypass FFmpeg's AVIO layer, making the
+		// interrupt_callback ineffective. Run on a detached thread so we can enforce
+		// a wall-clock timeout via future::wait_for without blocking on the future's
+		// destructor (which std::async would do).
+		// Note: on timeout the thread continues running until FFmpeg unblocks on its
+		// own — the AVFormatContext it allocated will leak in that case.
+		struct OpenResult { int open_err; int stream_err; AVFormatContext* ic; };
+		auto promise = std::make_shared<std::promise<OpenResult>>();
+		auto future  = promise->get_future();
+		std::thread
+		(
+			[promise, url_str = std::string(url), iformat]() mutable
+			{
+				AVFormatContext* ctx = nullptr;
+				int oe = avformat_open_input(&ctx, url_str.c_str(), iformat, nullptr);
+				if (oe < 0)
+				{
+					promise->set_value({ oe, 0, nullptr });
+					return;
+				}
+				int se = avformat_find_stream_info(ctx, nullptr);
+				promise->set_value({ oe, se, ctx });
+			}
+		).detach();
+
+		if (future.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+		{
+			RETURN_AV_ERROR("Timeout opening input '{}'", url);
+		}
+
+		auto [open_err, stream_err, ctx] = future.get();
+		ic = ctx;
+
+		auto err = open_err;
+		if (err < 0)
+		{
+			RETURN_AV_ERROR("Cannot open input '{}': {}", url, avErrorStr(err));
+		}
+
+		err = stream_err;
 		if (err < 0)
 		{
 			avformat_close_input(&ic);
