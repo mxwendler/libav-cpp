@@ -120,12 +120,27 @@ public:
 		/* Resolution must be a multiple of two. */
 		codecContext_->width  = width;
 		codecContext_->height = height;
+
 		/* timebase: This is the fundamental unit of time (in seconds) in terms
                      * of which frame timestamps are represented. For fixed-fps content,
                      * timebase should be 1/framerate and timestamp increments should be
                      * identical to 1. */
 		codecContext_->time_base = framerate;
-		codecContext_->gop_size = 10; //set gop_size
+
+		//
+		// keyframe interval
+		if (valueMap.count("gop_size"))
+		{
+			codecContext_->gop_size = std::get<int>(valueMap.at("gop_size"));
+		}
+		else
+		{
+			codecContext_->gop_size = 10;
+		}
+
+		//
+		// gop_size is handled above as a struct field; remove before passing remainder to OptSetter
+		valueMap.erase("gop_size");
 
 		codecContext_->bit_rate = 0;
 		if (codecContext_->priv_data)
