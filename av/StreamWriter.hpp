@@ -123,17 +123,27 @@ public:
 
 		c->setVideoParams(outWidth, outHeight, frameRate, std::move(codecParams));
 
-
+		//
+		// addStream creates the AVStream and sets AV_CODEC_FLAG_GLOBAL_HEADER on
+		// the encoder context (required before avcodec_open2 for MP4/MKV).
+		// avcodec_parameters_from_context inside addStream succeeds even on an
+		// unopened encoder — it copies basic params (width, height, pix_fmt).
+		// Extradata (SPS/PPS) is not yet available; it is updated below after open.
 		auto sIndExp = formatContext_->addStream(c);
 		if (!sIndExp)
 			FORWARD_AV_ERROR(sIndExp);
 
+		int sInd = sIndExp.value();
 
 		auto cOpenEXp = c->open();
 		if (!cOpenEXp)
 			FORWARD_AV_ERROR(cOpenEXp);
 
-		auto ret = avcodec_parameters_from_context(std::get<0>(formatContext_->streams_.at(0))->codecpar, c->native());
+		//
+		// Update stream codecpar with full parameters from the now-opened encoder,
+		// including extradata (SPS/PPS for H.264) needed by the MP4 muxer.
+		auto* avStr = std::get<0>(formatContext_->streams_.at(sInd));
+		avcodec_parameters_from_context(avStr->codecpar, c->native());
 
 		auto frameExp = c->newWriteableVideoFrame();
 		if (!frameExp)
@@ -151,7 +161,7 @@ public:
 		// set start time as real time wall clock.
 		stream->recording_start = chrono::system_clock::now();
 
-		stream->index = sIndExp.value();
+		stream->index = sInd;
 		int index     = stream->index;
 
 		streams_.emplace_back(std::move(stream));
@@ -161,8 +171,6 @@ public:
 
 		const AVCodec* codec = c->native()->codec;
 		LOG_AV_INFO("Added video stream #{} codec: {} {}x{} {} fps", index, codec->long_name, c->native()->width, c->native()->height, av_q2d(av_inv_q(c->native()->time_base)));
-
-
 
 		return index;
 	}
