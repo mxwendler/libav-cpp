@@ -17,10 +17,10 @@ class SimpleInputFormat : NoCopyable
 	{}
 
 public:
-	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio = false, bool enableVideo = true, std::string_view format_name = "") noexcept
+	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio, bool enableVideo, std::string_view format_name) noexcept
 	{
 		AVFormatContext* ic = nullptr;
-		const AVInputFormat *iformat = av_find_input_format(format_name.empty() ? "dshow" : format_name.data());
+		const AVInputFormat *iformat = av_find_input_format(format_name.data());
 
 		//
 		// avformat_open_input and avformat_find_stream_info can block indefinitely on

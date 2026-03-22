@@ -14,11 +14,11 @@ class StreamReader : NoCopyable
 	StreamReader() = default;
 
 public:
-	static Expected<Ptr<StreamReader>> create(std::string_view url, bool enableAudio = false, bool enableVideo = true) noexcept
+	static Expected<Ptr<StreamReader>> create(std::string_view url, bool enableAudio, bool enableVideo, std::string_view format_name) noexcept
 	{
 		Ptr<StreamReader> sr{new StreamReader};
 
-		auto iformExp = SimpleInputFormat::create(url, enableAudio, enableVideo);
+		auto iformExp = SimpleInputFormat::create(url, enableAudio, enableVideo, format_name);
 		if (!iformExp)
 			FORWARD_AV_ERROR(iformExp);
 
