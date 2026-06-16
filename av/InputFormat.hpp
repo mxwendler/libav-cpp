@@ -5,6 +5,7 @@
 #include <av/common.hpp>
 #include <chrono>
 #include <future>
+#include <map>
 #include <thread>
 
 namespace av
@@ -17,7 +18,7 @@ class SimpleInputFormat : NoCopyable
 	{}
 
 public:
-	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio, bool enableVideo, std::string_view format_name) noexcept
+	static Expected<Ptr<SimpleInputFormat>> create(std::string_view url, bool enableAudio, bool enableVideo, std::string_view format_name, const std::map<std::string, std::string>& options = {}) noexcept
 	{
 		AVFormatContext* ic = nullptr;
 		const AVInputFormat *iformat = av_find_input_format(format_name.data());
@@ -35,10 +36,14 @@ public:
 		auto future  = promise->get_future();
 		std::thread
 		(
-			[promise, url_str = std::string(url), iformat]() mutable
+			[promise, url_str = std::string(url), iformat, options]() mutable
 			{
+				AVDictionary* opts = nullptr;
+				for (const auto& kv : options)
+					av_dict_set(&opts, kv.first.c_str(), kv.second.c_str(), 0);
 				AVFormatContext* ctx = nullptr;
-				int oe = avformat_open_input(&ctx, url_str.c_str(), iformat, nullptr);
+				int oe = avformat_open_input(&ctx, url_str.c_str(), iformat, &opts);
+				av_dict_free(&opts);
 				if (oe < 0)
 				{
 					promise->set_value({ oe, 0, nullptr });
